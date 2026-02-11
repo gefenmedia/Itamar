@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: rav_itamar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/rav_itamar"
+      DATABASE_URL_SYNC: "postgresql://postgres:postgres@db:5432/rav_itamar"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      STORAGE_BACKEND: "local"
+      LOCAL_STORAGE_PATH: "/app/storage/pdfs"
+    depends_on:
+      - db
+    volumes:
+      - pdf_storage:/app/storage/pdfs
+
+volumes:
+  pgdata:
+  pdf_storage:
