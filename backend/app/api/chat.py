@@ -1,17 +1,23 @@
 """Chat and conversation management endpoints."""
 
 import uuid
+import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, async_session
+from app.core.config import settings
 from app.models.models import Conversation, Message, RetrievalLog
 from app.services.chat_pipeline import run_chat_pipeline
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Chat & Conversations"])
+
+# Session counter for auto-restudy trigger
+_session_counter = 0
 
 
 class ChatRequest(BaseModel):
@@ -23,12 +29,31 @@ class ConversationRename(BaseModel):
     title: str
 
 
+async def _run_auto_restudy():
+    """Background task: run restudy if session counter hits interval."""
+    try:
+        from app.services.restudy import run_restudy
+        async with async_session() as db:
+            result = await run_restudy(db)
+            await db.commit()
+            logger.info("Auto-restudy completed: %s", result.get("status"))
+    except Exception as e:
+        logger.warning("Auto-restudy failed: %s", e)
+
+
 @router.post("/chat")
-async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
+async def chat(
+    req: ChatRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     """Send a message and get a response.
 
     If conversation_id is None, creates a new conversation.
+    Triggers auto-restudy every N sessions (configurable).
     """
+    global _session_counter
+
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
@@ -57,6 +82,12 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         conversation_id=conv_id,
         user_message=req.message,
     )
+
+    # Auto-restudy trigger: every N chat sessions
+    _session_counter += 1
+    if _session_counter >= settings.restudy_interval_sessions:
+        _session_counter = 0
+        background_tasks.add_task(_run_auto_restudy)
 
     return {
         "conversation_id": str(conv_id),
