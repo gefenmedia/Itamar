@@ -15,11 +15,20 @@ class Settings(BaseSettings):
     s3_access_key: str = ""
     s3_secret_key: str = ""
 
-    # OpenAI (for embeddings + LLM)
+    # LLM backend: "ollama" (default, no API key) or "openai"
+    llm_backend: str = "ollama"
+
+    # Ollama settings (local, no API key needed)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+
+    # OpenAI settings (only used if llm_backend="openai")
     openai_api_key: str = ""
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
-    llm_model: str = "gpt-4o"
+    openai_model: str = "gpt-4o"
+
+    # Embeddings: local sentence-transformers (no API key needed)
+    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_dimensions: int = 384
 
     # Chunking
     chunk_size_tokens: int = 900

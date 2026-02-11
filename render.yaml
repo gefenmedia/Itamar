@@ -1,4 +1,8 @@
 # Render deployment config
+# Note: Render does not support Ollama natively.
+# For cloud deployment, either:
+#   1. Run Ollama on a separate VM and set OLLAMA_BASE_URL
+#   2. Switch to OpenAI by setting LLM_BACKEND=openai + OPENAI_API_KEY
 services:
   - type: web
     name: rav-itamar
@@ -9,9 +13,16 @@ services:
         fromDatabase:
           name: rav-itamar-db
           property: connectionString
-        # Note: Replace 'postgresql://' with 'postgresql+asyncpg://' in app config
-      - key: OPENAI_API_KEY
-        sync: false
+      - key: LLM_BACKEND
+        value: ollama
+      - key: OLLAMA_BASE_URL
+        sync: false  # Set to your Ollama server URL
+      - key: OLLAMA_MODEL
+        value: llama3.2
+      - key: EMBEDDING_MODEL
+        value: all-MiniLM-L6-v2
+      - key: EMBEDDING_DIMENSIONS
+        value: "384"
       - key: STORAGE_BACKEND
         value: local
       - key: LOCAL_STORAGE_PATH

@@ -11,6 +11,38 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # One-shot container that pulls the model after Ollama is ready
+  ollama-pull:
+    image: curlimages/curl:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        echo 'Pulling llama3.2 model...' &&
+        curl -s http://ollama:11434/api/pull -d '{\"name\": \"llama3.2\"}' &&
+        echo 'Model pull complete.'
+      "
+    restart: "no"
 
   app:
     build: .
@@ -19,14 +51,24 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/rav_itamar"
       DATABASE_URL_SYNC: "postgresql://postgres:postgres@db:5432/rav_itamar"
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      LLM_BACKEND: "ollama"
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "llama3.2"
+      EMBEDDING_MODEL: "all-MiniLM-L6-v2"
+      EMBEDDING_DIMENSIONS: "384"
       STORAGE_BACKEND: "local"
       LOCAL_STORAGE_PATH: "/app/storage/pdfs"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
     volumes:
       - pdf_storage:/app/storage/pdfs
+      - model_cache:/root/.cache
 
 volumes:
   pgdata:
+  ollama_data:
   pdf_storage:
+  model_cache:
